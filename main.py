@@ -31,8 +31,7 @@ cursor.execute(f"SELECT table_name FROM information_schema.tables WHERE table_sc
 tables = cursor.fetchall()
 
 failed = []
-can_truncate = ('Evaluacion_director_grupo', 'Promedio_puesto'
-                                             'Registro_comportamental1', 'Registro_comportamental4',
+can_truncate = ('Evaluacion_director_grupo', 'Promedio_puesto', 'Registro_comportamental1', 'Registro_comportamental4',
                 'Alerta_academica1', 'Alerta_academica2', 'Alerta_academica3', 'Alerta_academica4',
                 'Mensajes_adm',)
 can_skip = ('Promedio_puesto')
