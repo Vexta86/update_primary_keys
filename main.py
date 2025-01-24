@@ -1,10 +1,6 @@
 import mysql.connector
 from utils import json_to_dict
 import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Access environment variables
 db_host = os.getenv("DB_HOST")
