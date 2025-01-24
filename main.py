@@ -24,7 +24,6 @@ DATE = '0124'
 
 schema = json_to_dict('schema_carlos_vieco.json')
 
-# Step 1: Get a list of tables
 cursor.execute(f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{db_name}';")
 tables = cursor.fetchall()
 
@@ -41,19 +40,14 @@ for table in tables:
         actual_schema = cursor.fetchall()
 
         is_okay = (len(expected_schema) == len(actual_schema))
-
-        try:
-            if not is_okay:
-                if set_primary_key(cursor, db_connection, table_name, expected_schema, actual_schema, DATE, can_truncate):
-                    print('Successfully updated')
-
-        except Exception as e:
-            print('Something went wrong while updating', table_name, e)
-            failed.append({'table': table_name, 'error': str(e)})
-
+        if not is_okay:
+            if set_primary_key(db_connection, table_name, expected_schema, actual_schema, DATE, can_truncate):
+                print('Successfully updated', table_name)
+            else:
+                print('Something went wrong while updating', table_name)
+                failed.append(table_name)
 
 print(failed)
-print([fail['table'] for fail in failed])
 db_connection.commit()
 cursor.close()
 db_connection.close()

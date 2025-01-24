@@ -108,12 +108,11 @@ def truncate_table(db_connection, table_name):
         return False
 
 
-def set_primary_key(cursor, db_connection, table_name_to_alter, expected_keys, current_keys, backup_date,
+def set_primary_key(db_connection, table_name_to_alter, expected_keys, current_keys, backup_date,
                     can_truncate=()):
     """Sets or updates the primary key for a specified table. If a primary key exists,
     it is removed before adding the new key(s).
 
-    :param cursor: The database cursor to execute SQL queries.
     :param db_connection: The active database connection for committing changes.
     :param str table_name_to_alter: The name of the table to modify.
     :param list[dict] expected_keys: A list of dictionaries, where each dictionary contains:
@@ -121,10 +120,13 @@ def set_primary_key(cursor, db_connection, table_name_to_alter, expected_keys, c
         - 'is_autoincrement' (bool): Whether the column should be auto-incremented.
     :param list current_keys: The current primary keys of the table.
     :param str backup_date: The date suffix for backup operations.
-    :param list can_truncate: A list with the table names that can be truncated
+    :param tuple[str] can_truncate: A list with the table names that can be truncated
+
+    :return bool: True if the operation succeeds, False otherwise.
 
     :raises Exception: If the operation fails, an exception is raised with details.
     """
+    cursor = db_connection.cursor()
     logging.info(f"Processing table: {table_name_to_alter}")
     logging.info(f"Current primary keys: {current_keys}")
     logging.info(f"Expected primary keys: {expected_keys}")
@@ -177,15 +179,15 @@ def set_primary_key(cursor, db_connection, table_name_to_alter, expected_keys, c
             except Exception as backup_error:
                 db_connection.rollback()
                 logging.error(f"Failed to handle primary key addition: {backup_error}")
-                raise Exception(f"Failed to handle primary key addition: {backup_error}") from exception1
+                return False
         # Handle the case where the information in the table is not important
         elif table_name_to_alter in can_truncate:
             try:
                 # Backup and truncate the table before retrying
                 logging.warning(
                     f"Primary key addition failed. Backing up and truncating table: {table_name_to_alter}")
-                backup_table(cursor, db_connection, table_name_to_alter, backup_date)
-                truncate_table(cursor, db_connection, table_name_to_alter)
+                backup_table(db_connection, table_name_to_alter, backup_date)
+                truncate_table(db_connection, table_name_to_alter)
 
                 # Retry adding the primary key
                 logging.info(f"Retrying: {add_primary_key}")
@@ -194,11 +196,11 @@ def set_primary_key(cursor, db_connection, table_name_to_alter, expected_keys, c
             except Exception as backup_error:
                 db_connection.rollback()
                 logging.error(f"Failed to handle primary key addition: {backup_error}")
-                raise Exception(f"Failed to handle primary key addition: {backup_error}") from exception1
+                return False
 
         else:
             logging.error(f"Primary key addition failed for {table_name_to_alter}: {exception1}")
-            raise Exception(f"Primary key addition failed for {table_name_to_alter}: {exception1}")
+            return False
 
     # Verify and log the updated schema
     cursor.execute(f"SHOW KEYS FROM `{table_name_to_alter}` WHERE Key_name = 'PRIMARY'")

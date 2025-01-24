@@ -24,16 +24,13 @@ def json_to_dict(json_file):
         ...
     }
 
-    Args:
-        json_file (str): Path to the JSON file containing the schema information.
+    :param str json_file: Path to the JSON file containing the schema information.
 
-    Returns:
-        dict: A dictionary representation of the schema with table names as keys
-              and lists of primary key details as values.
+    :returns dict: A dictionary representation of the schema with table names as keys and lists of primary
+     key details as values.
 
-    Raises:
-        FileNotFoundError: If the specified JSON file does not exist.
-        json.JSONDecodeError: If the JSON file is not properly formatted.
+    :raises FileNotFoundError: If the specified JSON file does not exist.
+    :raises json.JSONDecodeError: If the JSON file is not properly formatted.
     """
     # Initialize an empty dictionary to store the schema
     schema_dict = {}
