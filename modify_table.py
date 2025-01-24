@@ -4,23 +4,24 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
-def insert_without_key(cursor, table_to_insert, key_name, backup_date):
+def insert_without_key(db_connection, table_name, key_name, backup_date):
     """Inserts data from a backup table into the original table, excluding a specific key column.
 
-    :param cursor: The database cursor to execute SQL queries.
-    :param table_to_insert: The name of the target table to insert data into.
+    :param db_connection: The active database connection for committing changes.
+    :param table_name: The name of the target table to insert data into.
     :param key_name: The name of the column to exclude from the operation.
     :param backup_date: The date suffix for the backup table (e.g., '0123').
 
     :return: bool: True if the operation succeeds, False otherwise.
     """
+    cursor = db_connection.cursor()
     try:
         # Validate table and column names
-        if not table_to_insert.isidentifier() or not key_name.isidentifier():
+        if not table_name.isidentifier() or not key_name.isidentifier():
             raise ValueError("Invalid table or column name provided.")
 
         # Fetch column names
-        show_columns = f"SHOW COLUMNS FROM `{table_to_insert}`"
+        show_columns = f"SHOW COLUMNS FROM `{table_name}`"
         cursor.execute(show_columns)
         columns = cursor.fetchall()
 
@@ -33,9 +34,9 @@ def insert_without_key(cursor, table_to_insert, key_name, backup_date):
         columns_name = ", ".join(f"`{col}`" for col in columns_name)
 
         # Construct and execute the SQL query
-        backup_table_name = f"{table_to_insert}_{backup_date}"
+        backup_table_name = f"{table_name}_{backup_date}"
         insert_in_backup_table = (
-            f"INSERT INTO `{table_to_insert}` ({columns_name}) "
+            f"INSERT INTO `{table_name}` ({columns_name}) "
             f"SELECT {columns_name} FROM `{backup_table_name}`"
         )
         cursor.execute(insert_in_backup_table)
@@ -47,27 +48,24 @@ def insert_without_key(cursor, table_to_insert, key_name, backup_date):
         return False
 
 
-def backup_table(cursor, db_connection, original_name, backup_date):
-    """
-    Creates a backup of a specified table by duplicating its structure and data.
+def backup_table(db_connection, table_name, backup_date):
+    """Creates a backup of a specified table by duplicating its structure and data.
 
-    Args:
-        cursor: The database cursor to execute SQL queries.
-        db_connection: The active database connection for committing changes.
-        original_name (str): The name of the table to back up.
-        backup_date (str): The date suffix to append to the backup table name (e.g., '20250123').
+    :param db_connection: The active database connection for committing changes.
+    :param str table_name: The name of the table to back up.
+    :param str backup_date: The date suffix to append to the backup table name (e.g., '20250123').
 
-    Returns:
-        bool: True if the operation succeeds, False otherwise.
+    :return bool: True if the operation succeeds, False otherwise.
     """
+    cursor = db_connection.cursor()
     try:
         # Validate the table name
-        if not original_name.isidentifier():
-            raise ValueError(f"Invalid table name: {original_name}")
+        if not table_name.isidentifier():
+            raise ValueError(f"Invalid table name: {table_name}")
 
         # Construct SQL queries
-        create_table_like = f"CREATE TABLE `{original_name}_{backup_date}` LIKE `{original_name}`"
-        insert_in_backup = f"INSERT INTO `{original_name}_{backup_date}` SELECT * FROM `{original_name}`"
+        create_table_like = f"CREATE TABLE `{table_name}_{backup_date}` LIKE `{table_name}`"
+        insert_in_backup = f"INSERT INTO `{table_name}_{backup_date}` SELECT * FROM `{table_name}`"
 
         # Execute the queries
         cursor.execute(create_table_like)
@@ -84,25 +82,22 @@ def backup_table(cursor, db_connection, original_name, backup_date):
         return False
 
 
-def truncate_table(cursor, db_connection, table_name_to_truncate):
-    """
-    Truncates (empties) a specified table, removing all rows while preserving its structure.
+def truncate_table(db_connection, table_name):
+    """Truncates (empties) a specified table, removing all rows while preserving its structure.
 
-    Args:
-        cursor: The database cursor to execute SQL queries.
-        db_connection: The active database connection for committing changes.
-        table_name_to_truncate (str): The name of the table to truncate.
+    :param db_connection: The active database connection for committing changes.
+    :param String table_name: The name of the table to truncate.
 
-    Returns:
-        bool: True if the operation succeeds, False otherwise.
+    :return bool: True if the operation succeeds, False otherwise.
     """
+    cursor = db_connection.cursor()
     try:
         # Validate the table name
-        if not table_name_to_truncate.isidentifier():
-            raise ValueError(f"Invalid table name: {table_name_to_truncate}")
+        if not table_name.isidentifier():
+            raise ValueError(f"Invalid table name: {table_name}")
 
         # Construct and execute the SQL query
-        truncate = f"TRUNCATE TABLE `{table_name_to_truncate}`"
+        truncate = f"TRUNCATE TABLE `{table_name}`"
         cursor.execute(truncate)
         logging.info(f"Table truncated: {truncate}")
         db_connection.commit()
@@ -115,23 +110,20 @@ def truncate_table(cursor, db_connection, table_name_to_truncate):
 
 def set_primary_key(cursor, db_connection, table_name_to_alter, expected_keys, current_keys, backup_date,
                     can_truncate=()):
-    """
-    Sets or updates the primary key for a specified table. If a primary key exists, it is removed before adding the new key(s).
+    """Sets or updates the primary key for a specified table. If a primary key exists,
+    it is removed before adding the new key(s).
 
-    Args:
-        :param cursor: The database cursor to execute SQL queries.
-        :param db_connection: The active database connection for committing changes.
-        :param table_name_to_alter: The name of the table to modify.
-        :param expected_keys: A list of dictionaries, where each dictionary contains:
-            - 'column_name' (str): The name of the column.
-            - 'is_autoincrement' (bool): Whether the column should be auto-incremented.
-        :param current_keys: The current primary keys of the table.
-        :param backup_date: The date suffix for backup operations.
-        :param can_truncate: A list with the table names that can be truncated
+    :param cursor: The database cursor to execute SQL queries.
+    :param db_connection: The active database connection for committing changes.
+    :param str table_name_to_alter: The name of the table to modify.
+    :param list[dict] expected_keys: A list of dictionaries, where each dictionary contains:
+        - 'column_name' (str): The name of the column.
+        - 'is_autoincrement' (bool): Whether the column should be auto-incremented.
+    :param list current_keys: The current primary keys of the table.
+    :param str backup_date: The date suffix for backup operations.
+    :param list can_truncate: A list with the table names that can be truncated
 
-    Raises:
-        Exception: If the operation fails, an exception is raised with details.
-
+    :raises Exception: If the operation fails, an exception is raised with details.
     """
     logging.info(f"Processing table: {table_name_to_alter}")
     logging.info(f"Current primary keys: {current_keys}")
@@ -166,8 +158,8 @@ def set_primary_key(cursor, db_connection, table_name_to_alter, expected_keys, c
             try:
                 # Backup and truncate the table before retrying
                 logging.warning(f"Primary key addition failed. Backing up and truncating table: {table_name_to_alter}")
-                backup_table(cursor, db_connection, table_name_to_alter, backup_date)
-                truncate_table(cursor, db_connection, table_name_to_alter)
+                backup_table(db_connection, table_name_to_alter, backup_date)
+                truncate_table(db_connection, table_name_to_alter)
 
                 # Retry adding the primary key
                 logging.info(f"Retrying: {add_primary_key}")
@@ -180,7 +172,7 @@ def set_primary_key(cursor, db_connection, table_name_to_alter, expected_keys, c
                 cursor.execute(add_autoincrement)
 
                 # Reinsert data without the primary key
-                insert_without_key(cursor, table_name_to_alter, expected_keys[0]['column_name'], backup_date)
+                insert_without_key(db_connection, table_name_to_alter, expected_keys[0]['column_name'], backup_date)
 
             except Exception as backup_error:
                 db_connection.rollback()
